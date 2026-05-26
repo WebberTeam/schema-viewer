@@ -39,6 +39,7 @@ export function SchemaViewer({
   const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY, moved } OR { areaId, tableIds, ... }
   // frontTableId kept for backward compat but we use frontGroupIds for z-order
   const [editingTable, setEditingTable] = useState(null); // table being edited (double-click popup)
+  const [editorInitialTab, setEditorInitialTab] = useState("fields"); // which tab to open on
   const [editorPos, setEditorPos] = useState({ x: 0, y: 0 }); // popup screen position
   const containerRef = useRef(null); // outer div ref for bounds
   const lastClickRef = useRef({ tableId: null, time: 0 }); // for double-click detection
@@ -103,6 +104,7 @@ export function SchemaViewer({
       const table = tables.find((t) => t.id === tableId);
       if (table) {
         setEditingTable(table);
+        setEditorInitialTab("fields");
         // Convert table SVG position to screen position, place popup to the right
         const cRect = containerRef.current?.getBoundingClientRect();
         if (cRect && svgRef.current) {
@@ -142,6 +144,31 @@ export function SchemaViewer({
     e.currentTarget.setPointerCapture(e.pointerId);
   }, [editable, screenToSVG, tablePositions, tables]);
 
+  // Edge click — open source table popup on relationships tab
+  const handleEdgeClick = useCallback((relData) => {
+    if (!editable) return;
+    const sourceTable = tables.find((t) => t.id === relData.startTableId);
+    if (!sourceTable) return;
+    setEditingTable(sourceTable);
+    setEditorInitialTab("relationships");
+    // Position popup near source table
+    const cRect = containerRef.current?.getBoundingClientRect();
+    if (cRect && svgRef.current) {
+      const svgRect = svgRef.current.getBoundingClientRect();
+      const scaleX = svgRect.width / viewBox.width;
+      const scaleY = svgRect.height / viewBox.height;
+      const sx = (sourceTable.x - viewBox.left) * scaleX + svgRect.left - cRect.left;
+      const sy = (sourceTable.y - viewBox.top) * scaleY + svgRect.top - cRect.top;
+      let px = sx + tableWidth * scaleX + 16;
+      let py = sy;
+      if (px + 580 > cRect.width) px = Math.max(8, sx - 580 - 16);
+      if (py + 500 > cRect.height) py = Math.max(8, cRect.height - 508);
+      if (py < 8) py = 8;
+      if (px < 8) px = 8;
+      setEditorPos({ x: px, y: py });
+    }
+  }, [editable, tables, viewBox, tableWidth]);
+
   // Area drag start (moves all tables in the area, brings group to front)
   const handleAreaPointerDown = useCallback((e, areaData) => {
     if (!editable) return;
@@ -161,14 +188,27 @@ export function SchemaViewer({
     e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
   }, [editable, screenToSVG, tables, tablePositions]);
 
+  // Background double-click detection (dismiss popup)
+  const lastBgClickRef = useRef(0);
+
   // Pan handlers
   const handlePointerDown = useCallback((e) => {
-    if (e.target === svgRef.current || e.target.tagName === "rect" || e.target.closest("[data-grid]")) {
+    const isBackground = e.target === svgRef.current || e.target.tagName === "rect" || e.target.closest("[data-grid]");
+    if (isBackground) {
+      // Double-click on background dismisses popup
+      const now = Date.now();
+      if (editingTable && now - lastBgClickRef.current < 400) {
+        setEditingTable(null);
+        lastBgClickRef.current = 0;
+        return;
+      }
+      lastBgClickRef.current = now;
+
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
       svgRef.current.setPointerCapture(e.pointerId);
     }
-  }, []);
+  }, [editingTable]);
 
   const handlePointerMove = useCallback((e) => {
     // Dragging (table or area) takes priority
@@ -316,6 +356,7 @@ export function SchemaViewer({
             showCardinality={showCardinality}
             showLabels={showRelationshipLabels}
             colors={colors}
+            onClick={editable ? () => handleEdgeClick(rel) : undefined}
           />
         ))}
 
@@ -334,14 +375,9 @@ export function SchemaViewer({
         ))}
       </svg>
 
-      {/* Double-click table editor popup — anchored near table, draggable */}
+      {/* Double-click table editor popup — graph stays interactive behind it */}
       {editingTable && (
         <>
-          {/* Light backdrop — graph visible but frozen */}
-          <div
-            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.15)", zIndex: 90, cursor: "default" }}
-            onClick={() => setEditingTable(null)}
-          />
           <DraggablePopup
             initialX={editorPos.x}
             initialY={editorPos.y}
@@ -353,6 +389,7 @@ export function SchemaViewer({
               relationships={relationships}
               subjectAreas={areas}
               colors={colors}
+              initialTab={editorInitialTab}
               onClose={() => setEditingTable(null)}
               onSave={(updatedTable, updatedRels) => {
                 if (onChange) {
@@ -386,8 +423,8 @@ function DraggablePopup({ initialX, initialY, containerRef, children }) {
   const popupRef = useRef(null);
 
   const handlePointerDown = useCallback((e) => {
-    // Only drag from the header (first child div with data-drag-handle)
-    if (!e.target.closest("[data-drag-handle]")) return;
+    // Only drag from the header, not from buttons inside it
+    if (!e.target.closest("[data-drag-handle]") || e.target.closest("[data-no-drag]")) return;
     e.preventDefault();
     setDragState({ startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y });
     e.currentTarget.setPointerCapture(e.pointerId);

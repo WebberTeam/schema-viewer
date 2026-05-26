@@ -19,7 +19,7 @@ const CARDINALITIES = [
   { value: "many_to_one", label: "N : 1" },
 ];
 
-export function TableEditor({ table, allTables, relationships, subjectAreas, onSave, onClose, colors }) {
+export function TableEditor({ table, allTables, relationships, subjectAreas, initialTab = "fields", onSave, onClose, colors }) {
   const [name, setName] = useState(table.name);
   const [comment, setComment] = useState(table.comment || "");
   const [color, setColor] = useState(table.color || "#175e7a");
@@ -30,7 +30,7 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, onS
       .map((r) => ({ ...r }))
   );
   const [errors, setErrors] = useState([]);
-  const [tab, setTab] = useState("fields"); // "fields" | "relationships"
+  const [tab, setTab] = useState(initialTab);
 
   // Find which group this table belongs to
   const group = subjectAreas?.find((a) =>
@@ -148,7 +148,7 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, onS
           </span>
         )}
         <span style={{ flex: 1 }} />
-        <button onClick={onClose} style={closeBtnStyle(colors)}>&times;</button>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} style={closeBtnStyle(colors)} data-no-drag>&times;</button>
       </div>
 
       {/* Body */}
@@ -244,15 +244,36 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, onS
                     <button onClick={() => removeRel(idx)} style={rmBtn()}>&times;</button>
                   </div>
 
-                  {/* Row 2: Source field → Target table.field */}
-                  <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 6, fontSize: 11 }}>
-                    <select value={rel.startFieldId} onChange={(e) => updateRel(idx, "startFieldId", e.target.value)} style={selectStyle(colors)}>
-                      {(isSource ? fields : (otherTable?.fields || [])).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  {/* Row 2: Source field → Target table.field (both sides mutable) */}
+                  <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 6, fontSize: 11, flexWrap: "wrap" }}>
+                    <span style={{ color: colors.textDim, fontSize: 9, width: 32 }}>{isSource ? "from" : "to"}</span>
+                    <select value={isSource ? rel.startFieldId : rel.endFieldId}
+                      onChange={(e) => updateRel(idx, isSource ? "startFieldId" : "endFieldId", e.target.value)}
+                      style={selectStyle(colors)}>
+                      {fields.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                     </select>
                     <span style={{ color: colors.textDim }}>&rarr;</span>
-                    <span style={{ color: colors.textDim, fontSize: 10 }}>{tn(otherTableId)}.</span>
-                    <select value={rel.endFieldId} onChange={(e) => updateRel(idx, "endFieldId", e.target.value)} style={selectStyle(colors)}>
-                      {(isSource ? (otherTable?.fields || []) : fields).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    <select value={otherTableId}
+                      onChange={(e) => {
+                        const newTargetId = e.target.value;
+                        const newTarget = allTables.find((t) => t.id === newTargetId);
+                        const firstField = newTarget?.fields?.[0];
+                        if (isSource) {
+                          updateRel(idx, "endTableId", newTargetId);
+                          if (firstField) updateRel(idx, "endFieldId", firstField.id);
+                        } else {
+                          updateRel(idx, "startTableId", newTargetId);
+                          if (firstField) updateRel(idx, "startFieldId", firstField.id);
+                        }
+                      }}
+                      style={selectStyle(colors)}>
+                      {allTables.filter((t) => t.id !== table.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    <span style={{ color: colors.textDim }}>.</span>
+                    <select value={isSource ? rel.endFieldId : rel.startFieldId}
+                      onChange={(e) => updateRel(idx, isSource ? "endFieldId" : "startFieldId", e.target.value)}
+                      style={selectStyle(colors)}>
+                      {(otherTable?.fields || []).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                     </select>
                   </div>
 

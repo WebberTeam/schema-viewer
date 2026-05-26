@@ -19,6 +19,7 @@ export function RelationshipPath({
   showCardinality = true,
   showLabels = true,
   colors,
+  onClick,
 }) {
   const pathRef = useRef();
   const labelRef = useRef();
@@ -74,7 +75,8 @@ export function RelationshipPath({
   const arrowId = `arrow_${data.id}`;
 
   return (
-    <g style={{ pointerEvents: "visibleStroke", userSelect: "none" }}>
+    <g style={{ pointerEvents: "visibleStroke", userSelect: "none", cursor: onClick ? "pointer" : "default" }}
+       onClick={onClick}>
       {/* Arrow marker definition */}
       {(data.showArrow ?? true) && (
         <defs>
