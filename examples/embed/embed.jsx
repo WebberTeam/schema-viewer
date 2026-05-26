@@ -12,9 +12,9 @@
  *   ?editable=true|false Enable editor mode (default: false)
  *   ?title=<string>      Override title display
  */
+import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { SchemaViewer } from "../../src/components";
-import { useState, useEffect } from "react";
 
 function EmbedApp() {
   const params = new URLSearchParams(window.location.search);

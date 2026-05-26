@@ -85,21 +85,21 @@
   <div class="demo-grid">
     <!-- Read-only dark -->
     <div class="demo-card">
-      <h3>Read-only, dark theme <code>?schema=sample-schema.json&theme=dark</code></h3>
-      <iframe src="index.html?schema=sample-schema.json&theme=dark&title=Blog%20Schema" height="400"></iframe>
+      <h3>Read-only, dark theme <code>?schema=...&theme=dark</code></h3>
+      <iframe src="/examples/embed/index.html?schema=/examples/embed/sample-schema.json&theme=dark&title=Blog%20Schema" height="400"></iframe>
     </div>
 
     <!-- Read-only light -->
     <div class="demo-card">
-      <h3>Read-only, light theme <code>?schema=sample-schema.json&theme=light</code></h3>
-      <iframe src="index.html?schema=sample-schema.json&theme=light&title=Blog%20Schema" height="400"></iframe>
+      <h3>Read-only, light theme <code>?schema=...&theme=light</code></h3>
+      <iframe src="/examples/embed/index.html?schema=/examples/embed/sample-schema.json&theme=light&title=Blog%20Schema" height="400"></iframe>
     </div>
   </div>
 
   <!-- Editable with postMessage -->
   <div class="full-card">
     <h3>Editable + postMessage API <code>?editable=true</code></h3>
-    <iframe id="editable-viewer" src="index.html?editable=true&theme=dark&title=Live%20Editor" height="500"></iframe>
+    <iframe id="editable-viewer" src="/examples/embed/index.html?editable=true&theme=dark&title=Live%20Editor" height="500"></iframe>
     <div class="controls">
       <button onclick="loadSample()">Load sample schema</button>
       <button onclick="loadMinimal()">Load minimal schema</button>
@@ -112,7 +112,7 @@
     const status = document.getElementById('status');
 
     function loadSample() {
-      fetch('sample-schema.json').then(r => r.json()).then(schema => {
+      fetch('/examples/embed/sample-schema.json').then(r => r.json()).then(schema => {
         viewer.contentWindow.postMessage({ type: 'loadSchema', schema }, '*');
         status.textContent = `Loaded: ${schema.tables.length} tables, ${schema.relationships.length} relationships`;
       });
