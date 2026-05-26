@@ -1,4 +1,7 @@
-# @webberteam/schema-viewer
+# @webberproject/schema-viewer
+
+[![npm version](https://img.shields.io/npm/v/@webberproject/schema-viewer)](https://www.npmjs.com/package/@webberproject/schema-viewer)
+[![license](https://img.shields.io/npm/l/@webberproject/schema-viewer)](https://github.com/WebberTeam/schema-viewer/blob/master/LICENSE)
 
 Interactive database schema viewer and editor. Renders ER diagrams from JSON schema definitions with zoom, pan, relationship routing, and inline editing.
 
