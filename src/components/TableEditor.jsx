@@ -62,15 +62,19 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
     setErrors([]);
   }, [fields, rels, table.id]);
 
+  const [highlightId, setHighlightId] = useState(null);
   const moveField = useCallback((idx, dir) => {
     const target = idx + dir;
     if (target < 0 || target >= fields.length) return;
+    const movedId = fields[idx].id;
     setFields((prev) => {
       const next = [...prev];
       [next[idx], next[target]] = [next[target], next[idx]];
       return next;
     });
-  }, [fields.length]);
+    setHighlightId(movedId);
+    setTimeout(() => setHighlightId(null), 600);
+  }, [fields]);
 
   const updateRel = useCallback((idx, key, value) => {
     setRels((prev) => prev.map((r, i) => i === idx ? { ...r, [key]: value } : r));
@@ -250,7 +254,13 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
                 <span style={{ width: 20 }} />
               </div>
               {fields.map((field, idx) => (
-                <div key={field.id || idx} style={{ display: "flex", alignItems: "center", padding: "2px 8px", borderBottom: idx < fields.length - 1 ? `1px solid ${colors.border}` : "none" }}>
+                <div key={field.id || idx} style={{
+                  display: "flex", alignItems: "center", padding: "2px 8px",
+                  borderBottom: idx < fields.length - 1 ? `1px solid ${colors.border}` : "none",
+                  background: highlightId === field.id ? "rgba(56,139,253,.15)" : "transparent",
+                  transition: "background 0.3s ease-out",
+                  borderLeft: highlightId === field.id ? "2px solid #388bfd" : "2px solid transparent",
+                }}>
                   {/* Reorder buttons */}
                   <div style={{ width: 32, display: "flex", flexDirection: "column", gap: 0, flexShrink: 0 }}>
                     <button onClick={() => moveField(idx, -1)} disabled={idx === 0} style={arrowBtn(colors, idx === 0)} title="Move up">&#9650;</button>
