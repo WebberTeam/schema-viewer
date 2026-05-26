@@ -78,13 +78,17 @@ npm run build   # Production build to dist/
 
 ## Roadmap
 
-1. ~~**SQL import** — Parse CREATE TABLE DDL into schema JSON~~ DONE (v0.1.0)
-2. ~~**Editor mode** — Drag tables to reposition~~ DONE (v0.1.0)
-3. **Column editing** — Add/remove/reorder fields, edit types
-4. **RDF/ontology support** — Extend schema format to support OWL classes, RDF properties, ontological hierarchies
-5. **Export** — PNG, SVG, PDF export of rendered diagrams
-6. **Embed mode** — `<iframe>` / Web Component packaging for documentation sites
-7. **Auto-layout** — Force-directed or hierarchical graph layout algorithms
+1. ~~**SQL import** — Parse CREATE TABLE DDL into schema JSON~~ DONE
+2. ~~**Editor mode** — Drag tables to reposition~~ DONE
+3. ~~**Column editing** — Add/remove/reorder fields, edit types, PK/UQ/NN~~ DONE
+4. ~~**Export** — PNG, SVG, JSON export of rendered diagrams~~ DONE
+5. ~~**Auto-layout** — Hierarchical (FK depth) + grid layout algorithms~~ DONE
+6. ~~**Group editor** — Create/edit/delete subject areas, change membership~~ DONE
+7. ~~**Relationship editor** — FK CRUD + edge styling (color, dash, bold, arrows)~~ DONE
+8. **RDF/ontology support** — Extend schema format for OWL classes, RDF properties, ontological hierarchies
+9. **Embed mode** — `<iframe>` / Web Component packaging for documentation sites
+10. **PDF export** — Multi-page PDF with jspdf
+11. **Force-directed layout** — Physics-based layout for complex schemas
 
 ## Attribution
 

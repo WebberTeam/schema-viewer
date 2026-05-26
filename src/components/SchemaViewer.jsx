@@ -10,6 +10,9 @@ import { TableNode } from "./TableNode";
 import { RelationshipPath } from "./RelationshipPath";
 import { SubjectArea, getContainedTables } from "./SubjectArea";
 import { TableEditor } from "./TableEditor";
+import { GroupEditor } from "./GroupEditor";
+import { exportPNG, exportSVG, exportJSON } from "../utils/exportDiagram";
+import { hierarchicalLayout, gridLayout } from "../utils/autoLayout";
 
 const GRID_SIZE = 24;
 const DEFAULT_TABLE_WIDTH = 220;
@@ -38,11 +41,13 @@ export function SchemaViewer({
   });
   const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY, moved } OR { areaId, tableIds, ... }
   // frontTableId kept for backward compat but we use frontGroupIds for z-order
-  const [editingTable, setEditingTable] = useState(null); // table being edited (double-click popup)
-  const [editorInitialTab, setEditorInitialTab] = useState("fields"); // which tab to open on
-  const [editorPos, setEditorPos] = useState({ x: 0, y: 0 }); // popup screen position
-  const containerRef = useRef(null); // outer div ref for bounds
-  const lastClickRef = useRef({ tableId: null, time: 0 }); // for double-click detection
+  const [editingTable, setEditingTable] = useState(null);
+  const [editorInitialTab, setEditorInitialTab] = useState("fields");
+  const [editorPos, setEditorPos] = useState({ x: 0, y: 0 });
+  const [editingGroup, setEditingGroup] = useState(null); // { group, isNew, pos }
+  const containerRef = useRef(null);
+  const lastClickRef = useRef({ tableId: null, time: 0 });
+  const lastAreaClickRef = useRef({ areaId: null, time: 0 });
 
   const rawTables = schema?.tables || [];
   const relationships = schema?.relationships || [];
@@ -169,14 +174,28 @@ export function SchemaViewer({
     }
   }, [editable, tables, viewBox, tableWidth]);
 
-  // Area drag start (moves all tables in the area, brings group to front)
+  // Area pointer down — drag or double-click to edit
   const handleAreaPointerDown = useCallback((e, areaData) => {
     if (!editable) return;
     e.stopPropagation();
+
+    // Double-click detection on area → open group editor
+    const now = Date.now();
+    const lastA = lastAreaClickRef.current;
+    if (lastA.areaId === areaData.id && now - lastA.time < 400) {
+      const cRect = containerRef.current?.getBoundingClientRect();
+      const px = Math.min(e.clientX - (cRect?.left || 0), (cRect?.width || 600) - 340);
+      const py = Math.min(e.clientY - (cRect?.top || 0), (cRect?.height || 400) - 300);
+      setEditingGroup({ group: areaData, isNew: false, pos: { x: Math.max(8, px), y: Math.max(8, py) } });
+      lastAreaClickRef.current = { areaId: null, time: 0 };
+      return;
+    }
+    lastAreaClickRef.current = { areaId: areaData.id, time: now };
+
     const svgPt = screenToSVG(e.clientX, e.clientY);
     const contained = getContainedTables(areaData, tables);
     const tableIds = contained.map((t) => t.id);
-    setFrontGroupIds(new Set(tableIds)); // bring entire group to front, preserving internal order
+    setFrontGroupIds(new Set(tableIds));
     const origPositions = Object.fromEntries(tableIds.map((id) => [id, { ...tablePositions[id] }]));
     setDragging({
       areaId: areaData.id,
@@ -305,6 +324,17 @@ export function SchemaViewer({
         </button>
         <button onClick={() => setViewBox(v => ({ ...v, width: v.width * 0.8, height: v.height * 0.8 }))} style={btnStyle(colors)} title="Zoom in">+</button>
         <button onClick={() => setViewBox(v => ({ ...v, width: v.width * 1.25, height: v.height * 1.25 }))} style={btnStyle(colors)} title="Zoom out">-</button>
+        <span style={{ width: 1, height: 20, background: colors.border, alignSelf: "center" }} />
+        {editable && (
+          <>
+            <button onClick={() => { if (onChange) { const laid = hierarchicalLayout({ ...schema, tables }); onChange(laid); setTablePositions(Object.fromEntries(laid.tables.map(t => [t.id, { x: t.x, y: t.y }]))); }}} style={btnStyle(colors)} title="Auto-layout (hierarchy)">&#9776;</button>
+            <button onClick={() => { if (onChange) { const laid = gridLayout({ ...schema, tables }); onChange(laid); setTablePositions(Object.fromEntries(laid.tables.map(t => [t.id, { x: t.x, y: t.y }]))); }}} style={btnStyle(colors)} title="Auto-layout (grid)">&#9638;</button>
+            <span style={{ width: 1, height: 20, background: colors.border, alignSelf: "center" }} />
+          </>
+        )}
+        <button onClick={() => exportPNG(svgRef.current)} style={btnStyle(colors)} title="Export PNG">PNG</button>
+        <button onClick={() => exportSVG(svgRef.current)} style={btnStyle(colors)} title="Export SVG">SVG</button>
+        <button onClick={() => exportJSON(schema)} style={btnStyle(colors)} title="Export JSON">JSON</button>
       </div>
 
       {/* SVG Canvas */}
@@ -391,6 +421,13 @@ export function SchemaViewer({
               colors={colors}
               initialTab={editorInitialTab}
               onClose={() => setEditingTable(null)}
+              onCreateGroup={() => {
+                setEditingGroup({
+                  group: { tableIds: [editingTable.id] },
+                  isNew: true,
+                  pos: { x: editorPos.x, y: editorPos.y + 40 },
+                });
+              }}
               onSave={(updatedTable, updatedRels, groupChange) => {
                 if (onChange) {
                   const touchedTableId = updatedTable.id;
@@ -427,6 +464,42 @@ export function SchemaViewer({
             />
           </DraggablePopup>
         </>
+      )}
+
+      {/* Group editor popup */}
+      {editingGroup && (
+        <DraggablePopup
+          initialX={editingGroup.pos.x}
+          initialY={editingGroup.pos.y}
+          containerRef={containerRef}
+        >
+          <GroupEditor
+            group={editingGroup.group}
+            isNew={editingGroup.isNew}
+            colors={colors}
+            onClose={() => setEditingGroup(null)}
+            onSave={(updatedGroup) => {
+              if (!onChange) { setEditingGroup(null); return; }
+              let newAreas;
+              if (editingGroup.isNew) {
+                newAreas = [...(schema.subjectAreas || []), updatedGroup];
+              } else {
+                newAreas = (schema.subjectAreas || []).map((a) =>
+                  a.id === updatedGroup.id ? { ...a, name: updatedGroup.name, color: updatedGroup.color } : a
+                );
+              }
+              // Cull empty groups (no members)
+              newAreas = newAreas.filter((a) => (a.tableIds?.length || 0) > 0 || a.id === updatedGroup.id);
+              onChange({ ...schema, subjectAreas: newAreas });
+              setEditingGroup(null);
+            }}
+            onDelete={(groupId) => {
+              if (!onChange) { setEditingGroup(null); return; }
+              onChange({ ...schema, subjectAreas: (schema.subjectAreas || []).filter((a) => a.id !== groupId) });
+              setEditingGroup(null);
+            }}
+          />
+        </DraggablePopup>
       )}
     </div>
   );

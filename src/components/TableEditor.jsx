@@ -19,7 +19,7 @@ const CARDINALITIES = [
   { value: "many_to_one", label: "N : 1" },
 ];
 
-export function TableEditor({ table, allTables, relationships, subjectAreas, initialTab = "fields", onSave, onClose, colors }) {
+export function TableEditor({ table, allTables, relationships, subjectAreas, initialTab = "fields", onSave, onClose, onCreateGroup, colors }) {
   const [name, setName] = useState(table.name);
   const [comment, setComment] = useState(table.comment || "");
   const [color, setColor] = useState(table.color || "#175e7a");
@@ -61,6 +61,16 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
     setFields((prev) => prev.filter((_, i) => i !== idx));
     setErrors([]);
   }, [fields, rels, table.id]);
+
+  const moveField = useCallback((idx, dir) => {
+    const target = idx + dir;
+    if (target < 0 || target >= fields.length) return;
+    setFields((prev) => {
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  }, [fields.length]);
 
   const updateRel = useCallback((idx, key, value) => {
     setRels((prev) => prev.map((r, i) => i === idx ? { ...r, [key]: value } : r));
@@ -191,13 +201,22 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <select
                 value={selectedGroupId}
-                onChange={(e) => setSelectedGroupId(e.target.value === "" ? "" : Number(e.target.value) || e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__new__") {
+                    // Signal to parent: create new group
+                    if (onCreateGroup) onCreateGroup();
+                    return;
+                  }
+                  setSelectedGroupId(v === "" ? "" : Number(v) || v);
+                }}
                 style={{ ...inputStyle(colors), flex: 1 }}
               >
                 <option value="">No group (ungrouped)</option>
                 {subjectAreas.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
+                <option value="__new__">+ Create new group...</option>
               </select>
               {group && (
                 <div style={{ width: 18, height: 18, borderRadius: 4, background: group.color, border: `1px solid ${colors.border}`, flexShrink: 0 }} />
@@ -221,18 +240,24 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
             </div>
             <div style={{ border: `1px solid ${colors.border}`, borderRadius: 6, overflow: "hidden" }}>
               <div style={{ display: "flex", background: colors.bg, borderBottom: `1px solid ${colors.border}`, padding: "4px 8px", fontSize: 10, color: colors.textDim, fontWeight: 600 }}>
-                <span style={{ width: 130 }}>Name</span>
-                <span style={{ width: 90 }}>Type</span>
-                <span style={{ width: 28, textAlign: "center" }}>PK</span>
-                <span style={{ width: 28, textAlign: "center" }}>UQ</span>
-                <span style={{ width: 28, textAlign: "center" }}>NN</span>
+                <span style={{ width: 32 }} />
+                <span style={{ width: 120 }}>Name</span>
+                <span style={{ width: 85 }}>Type</span>
+                <span style={{ width: 24, textAlign: "center" }}>PK</span>
+                <span style={{ width: 24, textAlign: "center" }}>UQ</span>
+                <span style={{ width: 24, textAlign: "center" }}>NN</span>
                 <span style={{ flex: 1 }}>Default</span>
-                <span style={{ width: 24 }} />
+                <span style={{ width: 20 }} />
               </div>
               {fields.map((field, idx) => (
-                <div key={field.id || idx} style={{ display: "flex", alignItems: "center", padding: "3px 8px", borderBottom: idx < fields.length - 1 ? `1px solid ${colors.border}` : "none" }}>
-                  <input value={field.name} onChange={(e) => updateField(idx, "name", e.target.value)} style={{ ...miniInput(colors), width: 130 }} placeholder="field_name" />
-                  <input value={field.type} onChange={(e) => updateField(idx, "type", e.target.value)} style={{ ...miniInput(colors), width: 90 }} placeholder="TEXT" />
+                <div key={field.id || idx} style={{ display: "flex", alignItems: "center", padding: "2px 8px", borderBottom: idx < fields.length - 1 ? `1px solid ${colors.border}` : "none" }}>
+                  {/* Reorder buttons */}
+                  <div style={{ width: 32, display: "flex", flexDirection: "column", gap: 0, flexShrink: 0 }}>
+                    <button onClick={() => moveField(idx, -1)} disabled={idx === 0} style={arrowBtn(colors, idx === 0)} title="Move up">&#9650;</button>
+                    <button onClick={() => moveField(idx, 1)} disabled={idx === fields.length - 1} style={arrowBtn(colors, idx === fields.length - 1)} title="Move down">&#9660;</button>
+                  </div>
+                  <input value={field.name} onChange={(e) => updateField(idx, "name", e.target.value)} style={{ ...miniInput(colors), width: 120 }} placeholder="field_name" />
+                  <input value={field.type} onChange={(e) => updateField(idx, "type", e.target.value)} style={{ ...miniInput(colors), width: 85 }} placeholder="TEXT" />
                   <Chk checked={field.primary} onChange={(v) => updateField(idx, "primary", v)} />
                   <Chk checked={field.unique} onChange={(v) => updateField(idx, "unique", v)} />
                   <Chk checked={field.notNull} onChange={(v) => updateField(idx, "notNull", v)} />
@@ -370,7 +395,8 @@ function miniInput(c) { return { padding: "2px 4px", background: c.bg, border: `
 function selectStyle(c) { return { padding: "2px 4px", background: c.bg, border: `1px solid ${c.border}`, borderRadius: 3, color: c.text, fontSize: 10, fontFamily: "inherit", outline: "none" }; }
 function closeBtnStyle(c) { return { background: "none", border: "none", color: c.textDim, fontSize: 20, cursor: "pointer", padding: "0 4px", lineHeight: 1 }; }
 function addBtnStyle() { return { marginLeft: "auto", padding: "2px 8px", background: "rgba(56,139,253,.1)", border: "1px solid rgba(56,139,253,.3)", borderRadius: 4, color: "#58a6ff", fontSize: 10, fontWeight: 600, cursor: "pointer" }; }
-function rmBtn() { return { width: 24, background: "none", border: "none", color: "#f85149", fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }; }
+function rmBtn() { return { width: 20, background: "none", border: "none", color: "#f85149", fontSize: 14, cursor: "pointer", padding: 0, lineHeight: 1 }; }
+function arrowBtn(c, disabled) { return { background: "none", border: "none", color: disabled ? c.border : c.textDim, fontSize: 8, cursor: disabled ? "default" : "pointer", padding: "0 2px", lineHeight: 1, opacity: disabled ? 0.3 : 0.7 }; }
 function fmtBtn(c) { return { width: 24, height: 24, border: `1px solid ${c.border}`, borderRadius: 3, color: c.text, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }; }
 function tabBtn(active, c) { return { padding: "4px 12px", borderRadius: 4, border: "none", fontSize: 11, fontWeight: 500, cursor: "pointer", background: active ? "#388bfd" : "transparent", color: active ? "#fff" : "#8b949e" }; }
 function cancelBtn(c) { return { padding: "6px 14px", background: c.surface, border: `1px solid ${c.border}`, borderRadius: 6, color: c.text, fontSize: 12, cursor: "pointer" }; }
