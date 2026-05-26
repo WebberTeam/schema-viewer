@@ -24,7 +24,7 @@ function getTypeColor(type) {
   return TYPE_COLORS[upper] || "#71717a";
 }
 
-export function TableNode({ data, tableWidth = 220, showComments = true, colors, editable = false, isDragging = false, onPointerDown, onDoubleClick }) {
+export function TableNode({ data, tableWidth = 220, showComments = true, colors, editable = false, isDragging = false, onPointerDown }) {
   const height = useMemo(
     () => getTableHeight(data, tableWidth, showComments),
     [data, tableWidth, showComments]
@@ -44,7 +44,6 @@ export function TableNode({ data, tableWidth = 220, showComments = true, colors,
     >
       <div
         xmlns="http://www.w3.org/1999/xhtml"
-        onDoubleClick={onDoubleClick}
         style={{
           border: isDragging ? "2px solid #388bfd" : `1.5px solid ${colors.border}`,
           borderRadius: 8,

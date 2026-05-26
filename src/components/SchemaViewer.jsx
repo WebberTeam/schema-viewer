@@ -36,9 +36,10 @@ export function SchemaViewer({
     const positions = Object.fromEntries((schema?.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]));
     return separateOverlaps(positions, schema?.tables || [], tableWidth, schema?.subjectAreas || []);
   });
-  const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY } OR { areaId, tableIds, ... }
+  const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY, moved } OR { areaId, tableIds, ... }
   const [frontTableId, setFrontTableId] = useState(null); // table brought to front on click/drag
   const [editingTable, setEditingTable] = useState(null); // table being edited (double-click popup)
+  const lastClickRef = useRef({ tableId: null, time: 0 }); // for double-click detection
 
   const rawTables = schema?.tables || [];
   const relationships = schema?.relationships || [];
@@ -82,11 +83,24 @@ export function SchemaViewer({
     };
   }, [viewBox]);
 
-  // Table drag start (called from TableNode)
+  // Table pointer down — starts a potential drag OR detects double-click
   const handleTablePointerDown = useCallback((e, tableId) => {
     if (!editable) return;
     e.stopPropagation();
-    setFrontTableId(tableId); // bring to front
+    setFrontTableId(tableId);
+
+    // Double-click detection: two clicks within 400ms on same table
+    const now = Date.now();
+    const last = lastClickRef.current;
+    if (last.tableId === tableId && now - last.time < 400) {
+      // Double-click — open editor
+      const table = tables.find((t) => t.id === tableId);
+      if (table) setEditingTable(table);
+      lastClickRef.current = { tableId: null, time: 0 };
+      return; // don't start drag
+    }
+    lastClickRef.current = { tableId, time: now };
+
     const svgPt = screenToSVG(e.clientX, e.clientY);
     const pos = tablePositions[tableId];
     setDragging({
@@ -95,9 +109,10 @@ export function SchemaViewer({
       startY: svgPt.y,
       origX: pos?.x ?? 0,
       origY: pos?.y ?? 0,
+      moved: false, // track if pointer actually moved
     });
     e.currentTarget.setPointerCapture(e.pointerId);
-  }, [editable, screenToSVG, tablePositions]);
+  }, [editable, screenToSVG, tablePositions, tables]);
 
   // Area drag start (moves all tables in the area)
   const handleAreaPointerDown = useCallback((e, areaData) => {
@@ -286,7 +301,6 @@ export function SchemaViewer({
             editable={editable}
             isDragging={dragging?.tableId === table.id}
             onPointerDown={(e) => handleTablePointerDown(e, table.id)}
-            onDoubleClick={() => editable && setEditingTable(table)}
           />
         ))}
       </svg>
