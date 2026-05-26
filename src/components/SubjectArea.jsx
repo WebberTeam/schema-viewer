@@ -14,12 +14,13 @@ function estimateTableHeight(t) {
 }
 
 export function SubjectArea({ data, colors, tables = null, editable, onPointerDown }) {
-  const pad = 30;
-  const labelOverhang = 6; // pixels the label extends beyond the border
+  const padInner = 48;   // enough room for cardinality badges + relationship curves
+  const padRight = 56;   // extra right padding for relationship lines exiting tables
+  const labelOverhang = 6;
 
   // Compute bounding box from contained tables
   let x, y, w, h;
-  const contained = getContainedTables(data, tables, pad);
+  const contained = getContainedTables(data, tables, 40);
 
   if (contained.length > 0) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -29,10 +30,10 @@ export function SubjectArea({ data, colors, tables = null, editable, onPointerDo
       maxX = Math.max(maxX, t.x + TABLE_WIDTH);
       maxY = Math.max(maxY, t.y + estimateTableHeight(t));
     }
-    x = minX - pad;
-    y = minY - pad;
-    w = Math.max(200, maxX - minX + pad * 2);
-    h = Math.max(150, maxY - minY + pad * 2);
+    x = minX - padInner;
+    y = minY - padInner;
+    w = Math.max(200, maxX - minX + padInner + padRight);
+    h = Math.max(150, maxY - minY + padInner * 2);
   } else {
     x = data.x;
     y = data.y;

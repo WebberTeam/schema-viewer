@@ -2,8 +2,8 @@
  * RelationshipPath — Read-only SVG relationship line with cardinality labels.
  * Derived from DrawDB Relationship.jsx (AGPL-3.0). Editor SideSheet removed.
  */
-import { useMemo, useRef, useState, useEffect } from "react";
-import { calcPath, tableFieldHeight, tableHeaderHeight, getCommentHeight } from "../utils/calcPath";
+import { useMemo, useRef, useState, useLayoutEffect } from "react";
+import { calcPath } from "../utils/calcPath";
 
 const CARDINALITY = {
   one_to_one: ["1", "1"],
@@ -45,27 +45,32 @@ export function RelationshipPath({
   const customStart = data.cardinality === "many_to_one" ? (data.manyLabel || "n") : cardinalityStart;
   const customEnd = data.cardinality === "one_to_many" ? (data.manyLabel || "n") : cardinalityEnd;
 
-  // Cardinality label positioning (requires rendered path)
+  // Compute path string (stable — only changes when pathValues or tableWidth change)
+  const d = useMemo(
+    () => pathValues ? calcPath(pathValues, tableWidth, 1, showComments) : "",
+    [pathValues, tableWidth, showComments]
+  );
+
+  // Position cardinality labels after path renders. useLayoutEffect + d dependency
+  // prevents the infinite re-render loop (old code had useEffect with no deps).
   const [positions, setPositions] = useState(null);
-  useEffect(() => {
-    if (!pathRef.current) return;
+  useLayoutEffect(() => {
+    if (!pathRef.current || !d) { setPositions(null); return; }
     const len = pathRef.current.getTotalLength();
-    if (len < 1) return;
+    if (len < 1) { setPositions(null); return; }
 
     const mid = pathRef.current.getPointAtLength(len / 2);
-    const p1 = pathRef.current.getPointAtLength(28);
-    const p2 = pathRef.current.getPointAtLength(len - 28);
+    const p1 = pathRef.current.getPointAtLength(Math.min(28, len * 0.15));
+    const p2 = pathRef.current.getPointAtLength(Math.max(len - 28, len * 0.85));
     const lw = labelRef.current?.getBBox().width ?? 0;
     const lh = labelRef.current?.getBBox().height ?? 0;
     setPositions({ mid, p1, p2, lw, lh });
-  });
+  }, [d]); // Only recompute when the path geometry changes
 
-  if (!pathValues) return null;
-
-  const d = calcPath(pathValues, tableWidth, 1, showComments);
+  if (!pathValues || !d) return null;
 
   return (
-    <g className="select-none" style={{ pointerEvents: "visibleStroke" }}>
+    <g style={{ pointerEvents: "visibleStroke", userSelect: "none" }}>
       {/* Invisible wider hit area */}
       <path d={d} fill="none" stroke="transparent" strokeWidth={12} />
 
@@ -108,7 +113,7 @@ function CardinalityBadge({ x, y, text, r = 12 }) {
   const [tw, setTw] = useState(0);
   const ref = useRef(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (ref.current) setTw(ref.current.getBBox().width);
   }, [text]);
 

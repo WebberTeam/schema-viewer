@@ -5,7 +5,7 @@
  * Usage:
  *   <SchemaViewer schema={jsonSchema} theme="dark" width="100%" height="600px" />
  */
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { TableNode } from "./TableNode";
 import { RelationshipPath } from "./RelationshipPath";
 import { SubjectArea, getContainedTables } from "./SubjectArea";
@@ -178,8 +178,10 @@ export function SchemaViewer({
     setIsPanning(false);
   }, [dragging, onChange, schema, tables, tablePositions]);
 
-  // Zoom handler
-  const handleWheel = useCallback((e) => {
+  // Zoom handler — attached via useEffect with {passive:false} to allow preventDefault.
+  // React's onWheel is passive by default in modern browsers, causing the console warning.
+  const wheelHandlerRef = useRef(null);
+  wheelHandlerRef.current = (e) => {
     e.preventDefault();
     const scale = e.deltaY > 0 ? 1.1 : 0.9;
     const rect = svgRef.current.getBoundingClientRect();
@@ -196,7 +198,14 @@ export function SchemaViewer({
         height: newHeight,
       };
     });
-  }, [viewBox]);
+  };
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const handler = (e) => wheelHandlerRef.current(e);
+    svg.addEventListener("wheel", handler, { passive: false });
+    return () => svg.removeEventListener("wheel", handler);
+  }, []);
 
   // Fit all
   const fitAll = useCallback(() => {
@@ -223,7 +232,6 @@ export function SchemaViewer({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
         style={{ cursor: isPanning ? "grabbing" : "grab", userSelect: "none", WebkitUserSelect: "none" }}
       >
         {/* Grid */}
