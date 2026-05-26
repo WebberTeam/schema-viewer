@@ -17,10 +17,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:embed": "vite build --config vite.embed.config.js",
     "build:standalone": "vite build --config vite.standalone.config.js",
     "build:slim": "vite build --config vite.slim.config.js",
-    "deploy": "npm run build:embed && gh-pages -d dist-embed",
     "prepublishOnly": "echo 'Ready to publish'",
     "preview": "vite preview"
   },

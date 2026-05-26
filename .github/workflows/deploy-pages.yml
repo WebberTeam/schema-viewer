@@ -29,14 +29,26 @@ jobs:
 
       - run: npm ci
 
-      - name: Build embed
-        run: npm run build:embed
+      - name: Build standalone bundles
+        run: npm run build:standalone && npm run build:slim
+
+      - name: Prepare Pages output
+        run: |
+          mkdir -p dist-pages
+          cp dist-standalone/schema-viewer.js dist-pages/
+          cp dist-standalone/schema-viewer.slim.js dist-pages/
+          echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>@webberproject/schema-viewer CDN</title></head><body style="font-family:monospace;background:#0d1117;color:#c9d1d9;padding:40px"><h1>@webberproject/schema-viewer</h1><p>Standalone bundles served from this CDN:</p><pre><a href="schema-viewer.slim.js">schema-viewer.slim.js</a>  (237KB — viewer + editor)
+          <a href="schema-viewer.js">schema-viewer.js</a>       (3.7MB — full: + SQL import + export)</pre><p>Usage:</p><pre>&lt;script src="https://webberteam.github.io/schema-viewer/schema-viewer.slim.js"&gt;&lt;/script&gt;
+          &lt;div id="graph" style="height:500px"&gt;&lt;/div&gt;
+          &lt;script&gt;
+            SchemaViewer.render("#graph", { schema: data, theme: "dark", editable: true });
+          &lt;/script&gt;</pre><p><a href="https://github.com/WebberTeam/schema-viewer">GitHub</a> · <a href="https://www.npmjs.com/package/@webberproject/schema-viewer">npm</a></p></body></html>' > dist-pages/index.html
 
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist-embed
+          path: dist-pages
 
       - name: Deploy
         id: deployment

@@ -46,47 +46,38 @@ const schema = importSQL(`
 `, 'postgres');
 ```
 
-## CDN (pre-v1)
+## CDN — Standalone Script (recommended)
 
-GitHub Pages serves the latest `master` build as a CDN at:
+Drop a single `<script>` tag into any HTML page. No framework, no iframe, no build step. Works offline from `file://`.
 
 ```
-https://webberteam.github.io/schema-viewer/
+https://webberteam.github.io/schema-viewer/schema-viewer.slim.js   (237KB / 74KB gz — viewer + editor)
+https://webberteam.github.io/schema-viewer/schema-viewer.js        (3.7MB — full: + SQL import + PDF/PNG export)
 ```
 
-Every push to `master` triggers an automated build + deploy via GitHub Actions.
-
-### Embed via iframe (CDN)
 ```html
-<iframe
-  src="https://webberteam.github.io/schema-viewer/?schema=https://example.com/my-schema.json&theme=dark"
-  width="100%" height="600" style="border:none; border-radius:8px;"
-/>
+<script src="https://webberteam.github.io/schema-viewer/schema-viewer.slim.js"></script>
+<div id="my-schema" style="height:500px"></div>
+<script>
+  SchemaViewer.render('#my-schema', {
+    schema: mySchemaData,
+    theme: 'dark',
+    editable: true,
+    onChange: (updated) => console.log('Schema changed:', updated),
+  });
+</script>
 ```
 
-### Embed via iframe (self-hosted)
-```html
-<iframe src="/schema-viewer/index.html?schema=/api/schema.json&theme=dark" height="600" />
+**API:** `SchemaViewer.render(selector|element, options) → { unmount(), update(newOptions) }`
+
+Every push to `master` auto-deploys via GitHub Actions.
+
+### Self-hosted
+
+Download the slim bundle and serve it locally:
+```bash
+curl -O https://webberteam.github.io/schema-viewer/schema-viewer.slim.js
 ```
-
-### Load schema dynamically via postMessage
-```js
-const viewer = document.getElementById('my-viewer');
-viewer.contentWindow.postMessage({ type: 'loadSchema', schema: mySchemaJSON }, '*');
-
-// Listen for edits
-window.addEventListener('message', (e) => {
-  if (e.data?.type === 'schemaChanged') console.log('Updated:', e.data.schema);
-});
-```
-
-### URL Parameters
-| Param | Values | Default | Description |
-|-------|--------|---------|-------------|
-| `schema` | URL | — | Load schema JSON from URL |
-| `theme` | `dark` \| `light` | `dark` | Color theme |
-| `editable` | `true` \| `false` | `false` | Enable editor mode |
-| `title` | string | — | Title bar text |
 
 ## Schema Format
 
