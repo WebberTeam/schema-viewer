@@ -132,15 +132,15 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, onS
 
   return (
     <div style={{
-      position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-      width: 580, maxHeight: "85vh", background: colors.surface, border: `1px solid ${colors.border}`,
-      borderRadius: 10, boxShadow: "0 16px 48px rgba(0,0,0,.5)", zIndex: 100,
+      width: 580, maxHeight: "75vh", background: colors.surface, border: `1px solid ${colors.border}`,
+      borderRadius: 10, boxShadow: "0 16px 48px rgba(0,0,0,.5)",
       display: "flex", flexDirection: "column",
       fontFamily: "'SF Mono','Cascadia Code','Consolas',monospace", fontSize: 12, color: colors.text,
       overflow: "hidden",
     }}>
-      {/* Header */}
-      <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.border}`, display: "flex", alignItems: "center", gap: 8, background: colors.bg }}>
+      {/* Header — drag handle */}
+      <div data-drag-handle style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.border}`, display: "flex", alignItems: "center", gap: 8, background: colors.bg, cursor: "grab" }}>
+        <span style={{ opacity: 0.3, fontSize: 10, letterSpacing: 2 }}>&#9776;</span>
         <span style={{ fontSize: 14, fontWeight: 700 }}>Edit Table</span>
         {group && (
           <span style={{ padding: "1px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600, background: `${group.color}20`, color: group.color, border: `1px solid ${group.color}40` }}>

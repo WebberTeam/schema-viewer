@@ -39,6 +39,8 @@ export function SchemaViewer({
   const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY, moved } OR { areaId, tableIds, ... }
   // frontTableId kept for backward compat but we use frontGroupIds for z-order
   const [editingTable, setEditingTable] = useState(null); // table being edited (double-click popup)
+  const [editorPos, setEditorPos] = useState({ x: 0, y: 0 }); // popup screen position
+  const containerRef = useRef(null); // outer div ref for bounds
   const lastClickRef = useRef({ tableId: null, time: 0 }); // for double-click detection
 
   const rawTables = schema?.tables || [];
@@ -97,9 +99,31 @@ export function SchemaViewer({
     const now = Date.now();
     const last = lastClickRef.current;
     if (last.tableId === tableId && now - last.time < 400) {
-      // Double-click — open editor
+      // Double-click — open editor near the table
       const table = tables.find((t) => t.id === tableId);
-      if (table) setEditingTable(table);
+      if (table) {
+        setEditingTable(table);
+        // Convert table SVG position to screen position, place popup to the right
+        const cRect = containerRef.current?.getBoundingClientRect();
+        if (cRect && svgRef.current) {
+          const svgRect = svgRef.current.getBoundingClientRect();
+          const scaleX = svgRect.width / viewBox.width;
+          const scaleY = svgRect.height / viewBox.height;
+          const tableScreenX = (table.x - viewBox.left) * scaleX + svgRect.left - cRect.left;
+          const tableScreenY = (table.y - viewBox.top) * scaleY + svgRect.top - cRect.top;
+          // Place popup to the right of the table, or left if too close to right edge
+          const popupW = 580;
+          const popupH = 500;
+          let px = tableScreenX + tableWidth * scaleX + 16;
+          let py = tableScreenY;
+          // Clamp to container bounds
+          if (px + popupW > cRect.width) px = Math.max(8, tableScreenX - popupW - 16);
+          if (py + popupH > cRect.height) py = Math.max(8, cRect.height - popupH - 8);
+          if (py < 8) py = 8;
+          if (px < 8) px = 8;
+          setEditorPos({ x: px, y: py });
+        }
+      }
       lastClickRef.current = { tableId: null, time: 0 };
       return; // don't start drag
     }
@@ -233,7 +257,7 @@ export function SchemaViewer({
   }, [schema]);
 
   return (
-    <div style={{ width, height, position: "relative", overflow: "hidden", background: colors.bg, borderRadius: "8px" }}>
+    <div ref={containerRef} style={{ width, height, position: "relative", overflow: "hidden", background: colors.bg, borderRadius: "8px" }}>
       {/* Controls */}
       <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, display: "flex", gap: 4 }}>
         <button onClick={fitAll} style={btnStyle(colors)} title="Fit all">
@@ -310,40 +334,100 @@ export function SchemaViewer({
         ))}
       </svg>
 
-      {/* Double-click table editor popup */}
+      {/* Double-click table editor popup — anchored near table, draggable */}
       {editingTable && (
         <>
+          {/* Light backdrop — graph visible but frozen */}
           <div
-            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 90 }}
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.15)", zIndex: 90, cursor: "default" }}
             onClick={() => setEditingTable(null)}
           />
-          <TableEditor
-            table={editingTable}
-            allTables={tables}
-            relationships={relationships}
-            subjectAreas={areas}
-            colors={colors}
-            onClose={() => setEditingTable(null)}
-            onSave={(updatedTable, updatedRels) => {
-              if (onChange) {
-                // Merge updated relationships: replace matching IDs, add new, remove deleted
-                const editedRelIds = new Set(updatedRels.map((r) => r.id));
-                const touchedTableId = updatedTable.id;
-                // Keep rels not touching this table + merge in updated rels
-                const otherRels = schema.relationships.filter(
-                  (r) => r.startTableId !== touchedTableId && r.endTableId !== touchedTableId
-                );
-                onChange({
-                  ...schema,
-                  tables: schema.tables.map((t) => t.id === updatedTable.id ? updatedTable : t),
-                  relationships: [...otherRels, ...updatedRels],
-                });
-              }
-              setEditingTable(null);
-            }}
-          />
+          <DraggablePopup
+            initialX={editorPos.x}
+            initialY={editorPos.y}
+            containerRef={containerRef}
+          >
+            <TableEditor
+              table={editingTable}
+              allTables={tables}
+              relationships={relationships}
+              subjectAreas={areas}
+              colors={colors}
+              onClose={() => setEditingTable(null)}
+              onSave={(updatedTable, updatedRels) => {
+                if (onChange) {
+                  const touchedTableId = updatedTable.id;
+                  const otherRels = schema.relationships.filter(
+                    (r) => r.startTableId !== touchedTableId && r.endTableId !== touchedTableId
+                  );
+                  onChange({
+                    ...schema,
+                    tables: schema.tables.map((t) => t.id === updatedTable.id ? updatedTable : t),
+                    relationships: [...otherRels, ...updatedRels],
+                  });
+                }
+                setEditingTable(null);
+              }}
+            />
+          </DraggablePopup>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * DraggablePopup — positions children at (initialX, initialY) within
+ * containerRef bounds. Header area is draggable.
+ */
+function DraggablePopup({ initialX, initialY, containerRef, children }) {
+  const [pos, setPos] = useState({ x: initialX, y: initialY });
+  const [dragState, setDragState] = useState(null);
+  const popupRef = useRef(null);
+
+  const handlePointerDown = useCallback((e) => {
+    // Only drag from the header (first child div with data-drag-handle)
+    if (!e.target.closest("[data-drag-handle]")) return;
+    e.preventDefault();
+    setDragState({ startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, [pos]);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!dragState) return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    let nx = dragState.origX + dx;
+    let ny = dragState.origY + dy;
+    // Clamp to container
+    if (containerRef.current && popupRef.current) {
+      const cw = containerRef.current.clientWidth;
+      const ch = containerRef.current.clientHeight;
+      const pw = popupRef.current.offsetWidth;
+      const ph = popupRef.current.offsetHeight;
+      nx = Math.max(0, Math.min(nx, cw - pw));
+      ny = Math.max(0, Math.min(ny, ch - ph));
+    }
+    setPos({ x: nx, y: ny });
+  }, [dragState, containerRef]);
+
+  const handlePointerUp = useCallback(() => setDragState(null), []);
+
+  return (
+    <div
+      ref={popupRef}
+      style={{
+        position: "absolute",
+        left: pos.x,
+        top: pos.y,
+        zIndex: 100,
+        userSelect: "none",
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+    >
+      {children}
     </div>
   );
 }
