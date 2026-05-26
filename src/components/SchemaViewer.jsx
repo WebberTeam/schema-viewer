@@ -8,7 +8,8 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { TableNode } from "./TableNode";
 import { RelationshipPath } from "./RelationshipPath";
-import { SubjectArea } from "./SubjectArea";
+import { SubjectArea, getContainedTables } from "./SubjectArea";
+import { TableEditor } from "./TableEditor";
 
 const GRID_SIZE = 24;
 const DEFAULT_TABLE_WIDTH = 220;
@@ -35,8 +36,9 @@ export function SchemaViewer({
     const positions = Object.fromEntries((schema?.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]));
     return separateOverlaps(positions, schema?.tables || [], tableWidth, schema?.subjectAreas || []);
   });
-  const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY }
+  const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY } OR { areaId, tableIds, ... }
   const [frontTableId, setFrontTableId] = useState(null); // table brought to front on click/drag
+  const [editingTable, setEditingTable] = useState(null); // table being edited (double-click popup)
 
   const rawTables = schema?.tables || [];
   const relationships = schema?.relationships || [];
@@ -97,6 +99,24 @@ export function SchemaViewer({
     e.currentTarget.setPointerCapture(e.pointerId);
   }, [editable, screenToSVG, tablePositions]);
 
+  // Area drag start (moves all tables in the area)
+  const handleAreaPointerDown = useCallback((e, areaData) => {
+    if (!editable) return;
+    e.stopPropagation();
+    const svgPt = screenToSVG(e.clientX, e.clientY);
+    const contained = getContainedTables(areaData, tables);
+    const tableIds = contained.map((t) => t.id);
+    const origPositions = Object.fromEntries(tableIds.map((id) => [id, { ...tablePositions[id] }]));
+    setDragging({
+      areaId: areaData.id,
+      tableIds,
+      origPositions,
+      startX: svgPt.x,
+      startY: svgPt.y,
+    });
+    e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
+  }, [editable, screenToSVG, tables, tablePositions]);
+
   // Pan handlers
   const handlePointerDown = useCallback((e) => {
     if (e.target === svgRef.current || e.target.tagName === "rect" || e.target.closest("[data-grid]")) {
@@ -107,17 +127,30 @@ export function SchemaViewer({
   }, []);
 
   const handlePointerMove = useCallback((e) => {
-    // Table dragging takes priority
+    // Dragging (table or area) takes priority
     if (dragging) {
       const svgPt = screenToSVG(e.clientX, e.clientY);
       const dx = svgPt.x - dragging.startX;
       const dy = svgPt.y - dragging.startY;
-      const newX = Math.round((dragging.origX + dx) / GRID_SIZE) * GRID_SIZE;
-      const newY = Math.round((dragging.origY + dy) / GRID_SIZE) * GRID_SIZE;
-      setTablePositions((prev) => ({
-        ...prev,
-        [dragging.tableId]: { x: newX, y: newY },
-      }));
+
+      if (dragging.tableId) {
+        // Single table drag
+        const newX = Math.round((dragging.origX + dx) / GRID_SIZE) * GRID_SIZE;
+        const newY = Math.round((dragging.origY + dy) / GRID_SIZE) * GRID_SIZE;
+        setTablePositions((prev) => ({ ...prev, [dragging.tableId]: { x: newX, y: newY } }));
+      } else if (dragging.areaId) {
+        // Area drag — move all contained tables
+        const snapDx = Math.round(dx / GRID_SIZE) * GRID_SIZE;
+        const snapDy = Math.round(dy / GRID_SIZE) * GRID_SIZE;
+        setTablePositions((prev) => {
+          const next = { ...prev };
+          for (const id of dragging.tableIds) {
+            const orig = dragging.origPositions[id];
+            next[id] = { x: orig.x + snapDx, y: orig.y + snapDy };
+          }
+          return next;
+        });
+      }
       return;
     }
 
@@ -191,7 +224,7 @@ export function SchemaViewer({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onWheel={handleWheel}
-        style={{ cursor: isPanning ? "grabbing" : "grab" }}
+        style={{ cursor: isPanning ? "grabbing" : "grab", userSelect: "none", WebkitUserSelect: "none" }}
       >
         {/* Grid */}
         <defs>
@@ -210,7 +243,14 @@ export function SchemaViewer({
 
         {/* Subject Areas (behind tables, auto-sized to contained tables) */}
         {areas.map((area) => (
-          <SubjectArea key={area.id} data={area} colors={colors} tables={tables} />
+          <SubjectArea
+            key={area.id}
+            data={area}
+            colors={colors}
+            tables={tables}
+            editable={editable}
+            onPointerDown={(e) => handleAreaPointerDown(e, area)}
+          />
         ))}
 
         {/* Relationships */}
@@ -238,9 +278,36 @@ export function SchemaViewer({
             editable={editable}
             isDragging={dragging?.tableId === table.id}
             onPointerDown={(e) => handleTablePointerDown(e, table.id)}
+            onDoubleClick={() => editable && setEditingTable(table)}
           />
         ))}
       </svg>
+
+      {/* Double-click table editor popup */}
+      {editingTable && (
+        <>
+          <div
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 90 }}
+            onClick={() => setEditingTable(null)}
+          />
+          <TableEditor
+            table={editingTable}
+            allTables={tables}
+            relationships={relationships}
+            colors={colors}
+            onClose={() => setEditingTable(null)}
+            onSave={(updated) => {
+              if (onChange) {
+                onChange({
+                  ...schema,
+                  tables: schema.tables.map((t) => t.id === updated.id ? updated : t),
+                });
+              }
+              setEditingTable(null);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
