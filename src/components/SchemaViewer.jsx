@@ -30,14 +30,19 @@ export function SchemaViewer({
   onChange = null,
 }) {
   const svgRef = useRef(null);
-  const [viewBox, setViewBox] = useState(() => computeInitialViewBox(schema));
+  const [viewBox, setViewBox] = useState(() => {
+    // Compute viewBox from grid-laid positions for a clean initial fit
+    const laid = gridLayout(schema || { tables: [], relationships: [], subjectAreas: [] });
+    return computeInitialViewBox({ ...schema, tables: laid.tables });
+  });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
-  // Editor state: internal copy of tables for drag positioning
+  // Editor state: internal copy of tables for drag positioning.
+  // Default: grid layout + fit-all for clean initial render.
   const [tablePositions, setTablePositions] = useState(() => {
-    const positions = Object.fromEntries((schema?.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]));
-    return separateOverlaps(positions, schema?.tables || [], tableWidth, schema?.subjectAreas || []);
+    const laid = gridLayout(schema || { tables: [], relationships: [], subjectAreas: [] });
+    return Object.fromEntries((laid.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]));
   });
   const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY, moved } OR { areaId, tableIds, ... }
   // frontTableId kept for backward compat but we use frontGroupIds for z-order
