@@ -34,9 +34,31 @@ export function SubjectArea({ data, colors, tables = null, editable, onPointerDo
     y = minY - padInner;
     w = Math.max(200, maxX - minX + padInner + padRight);
     h = Math.max(150, maxY - minY + padInner * 2);
+  } else if (data.tableIds?.length > 0 && tables?.length > 0) {
+    // Group has member IDs but they weren't found via getContainedTables —
+    // search all tables directly by ID as a fallback
+    const members = tables.filter((t) => data.tableIds.includes(t.id));
+    if (members.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const t of members) {
+        minX = Math.min(minX, t.x);
+        minY = Math.min(minY, t.y);
+        maxX = Math.max(maxX, t.x + TABLE_WIDTH);
+        maxY = Math.max(maxY, t.y + estimateTableHeight(t));
+      }
+      x = minX - padInner;
+      y = minY - padInner;
+      w = Math.max(200, maxX - minX + padInner + padRight);
+      h = Math.max(150, maxY - minY + padInner * 2);
+    } else {
+      // Members not found at all — don't render orphan box
+      return null;
+    }
   } else {
-    x = data.x;
-    y = data.y;
+    // No tableIds and no position data — don't render
+    if (data.x == null && data.y == null) return null;
+    x = data.x ?? 0;
+    y = data.y ?? 0;
     w = data.width || 300;
     h = data.height || 200;
   }
