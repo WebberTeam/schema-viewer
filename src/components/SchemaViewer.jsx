@@ -31,10 +31,12 @@ export function SchemaViewer({
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Editor state: internal copy of tables for drag positioning
-  const [tablePositions, setTablePositions] = useState(() =>
-    Object.fromEntries((schema?.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]))
-  );
+  const [tablePositions, setTablePositions] = useState(() => {
+    const positions = Object.fromEntries((schema?.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]));
+    return separateOverlaps(positions, schema?.tables || [], tableWidth);
+  });
   const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY }
+  const [frontTableId, setFrontTableId] = useState(null); // table brought to front on click/drag
 
   const rawTables = schema?.tables || [];
   const relationships = schema?.relationships || [];
@@ -49,6 +51,14 @@ export function SchemaViewer({
     })),
     [rawTables, tablePositions]
   );
+
+  // Sort tables so the "front" table renders last (SVG z-order = paint order)
+  const sortedTables = useMemo(() => {
+    if (!frontTableId) return tables;
+    const rest = tables.filter((t) => t.id !== frontTableId);
+    const front = tables.find((t) => t.id === frontTableId);
+    return front ? [...rest, front] : tables;
+  }, [tables, frontTableId]);
 
   const colors = useMemo(() => ({
     bg: theme === "dark" ? "#0d1117" : "#ffffff",
@@ -74,6 +84,7 @@ export function SchemaViewer({
   const handleTablePointerDown = useCallback((e, tableId) => {
     if (!editable) return;
     e.stopPropagation();
+    setFrontTableId(tableId); // bring to front
     const svgPt = screenToSVG(e.clientX, e.clientY);
     const pos = tablePositions[tableId];
     setDragging({
@@ -197,9 +208,9 @@ export function SchemaViewer({
           fill="url(#grid)"
         />
 
-        {/* Subject Areas (behind tables) */}
+        {/* Subject Areas (behind tables, auto-sized to contained tables) */}
         {areas.map((area) => (
-          <SubjectArea key={area.id} data={area} colors={colors} />
+          <SubjectArea key={area.id} data={area} colors={colors} tables={tables} />
         ))}
 
         {/* Relationships */}
@@ -216,8 +227,8 @@ export function SchemaViewer({
           />
         ))}
 
-        {/* Tables */}
-        {tables.map((table) => (
+        {/* Tables — front table rendered last for z-ordering */}
+        {sortedTables.map((table) => (
           <TableNode
             key={table.id}
             data={table}
@@ -252,6 +263,44 @@ function computeInitialViewBox(schema) {
     width: Math.max(600, maxX - minX + pad * 2),
     height: Math.max(400, maxY - minY + pad * 2),
   };
+}
+
+/**
+ * Simple overlap separation — pushes overlapping tables apart on initial render.
+ * Runs a few iterations of collision resolution.
+ */
+function separateOverlaps(positions, tables, tw = 220) {
+  if (tables.length < 2) return positions;
+
+  const result = { ...positions };
+  const PAD = 16;
+  const th = 250; // approximate table height
+
+  for (let iter = 0; iter < 5; iter++) {
+    let moved = false;
+    for (let i = 0; i < tables.length; i++) {
+      for (let j = i + 1; j < tables.length; j++) {
+        const a = tables[i], b = tables[j];
+        const ax = result[a.id]?.x ?? a.x, ay = result[a.id]?.y ?? a.y;
+        const bx = result[b.id]?.x ?? b.x, by = result[b.id]?.y ?? b.y;
+
+        const overlapX = (ax + tw + PAD) - bx;
+        const overlapY = (ay + th + PAD) - by;
+
+        if (overlapX > 0 && overlapY > 0) {
+          // Tables overlap — push the second one away
+          if (overlapX < overlapY) {
+            result[b.id] = { x: bx + overlapX, y: by };
+          } else {
+            result[b.id] = { x: bx, y: by + overlapY };
+          }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  return result;
 }
 
 function btnStyle(colors) {

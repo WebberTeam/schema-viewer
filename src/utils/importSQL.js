@@ -107,9 +107,9 @@ function parseCreateTable(stmt, tables, relationships, enums, database) {
       const field = parseColumn(d, database);
       table.fields.push(field);
 
-      // Inline FOREIGN KEY on column
+      // Inline FOREIGN KEY on column (e.g., role_id INTEGER REFERENCES roles(id))
       if (d.reference_definition) {
-        const rel = buildRelationship(
+        const rel = buildInlineRelationship(
           table, field, d.reference_definition, tables, d
         );
         if (rel) relationships.push(rel);
@@ -230,6 +230,44 @@ function parseForeignKey(d, table, tables, relationships) {
   }
 
   relationships.push(rel);
+}
+
+/**
+ * Build a relationship from an inline column-level REFERENCES clause.
+ * e.g.: role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL
+ */
+function buildInlineRelationship(table, field, refDef, tables, colDef) {
+  const endTableName = extractRefTableName(refDef);
+  const endFieldName = extractRefColumns(refDef)[0];
+  if (!endTableName || !endFieldName) return null;
+
+  const endTable = tables.find((t) => t.name === endTableName);
+  if (!endTable) return null;
+
+  const endField = endTable.fields.find((f) => f.name === endFieldName);
+  if (!endField) return null;
+
+  const rel = {
+    id: nanoid(),
+    name: `fk_${table.name}_${field.name}_${endTableName}`,
+    startTableId: table.id,
+    startFieldId: field.id,
+    endTableId: endTable.id,
+    endFieldId: endField.id,
+    cardinality: field.unique || field.primary ? "one_to_one" : "many_to_one",
+    updateConstraint: "No action",
+    deleteConstraint: "No action",
+  };
+
+  if (refDef.on_action) {
+    for (const action of refDef.on_action) {
+      const val = titleCase(action.value?.value || action.value || "No action");
+      if (action.type === "on update") rel.updateConstraint = val;
+      else if (action.type === "on delete") rel.deleteConstraint = val;
+    }
+  }
+
+  return rel;
 }
 
 // ---------------------------------------------------------------------------

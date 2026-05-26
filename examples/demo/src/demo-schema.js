@@ -163,8 +163,11 @@ export const demoSchema = {
   ],
 
   subjectAreas: [
-    { id: 1, name: "TYPE SYSTEM (Ontology DAG)", x: 660, y: 10, width: 340, height: 480, color: "#bc8cff" },
-    { id: 2, name: "ENTITY REFERENCE (Hub + Spoke)", x: 20, y: 500, width: 920, height: 420, color: "#3fb950" },
-    { id: 3, name: "LEGACY (Wikidata)", x: 20, y: 10, width: 600, height: 470, color: "#388bfd" },
+    { id: 1, name: "TYPE SYSTEM (Ontology DAG)", x: 660, y: 10, width: 340, height: 480, color: "#bc8cff",
+      tableIds: ["type_registry", "type_edges", "type_ancestors"] },
+    { id: 2, name: "ENTITY REFERENCE (Hub + Spoke)", x: 20, y: 500, width: 920, height: 420, color: "#3fb950",
+      tableIds: ["entity_reference", "entity_reference_edges", "ref_drugbank", "ref_cpe", "ref_crossref"] },
+    { id: 3, name: "LEGACY (Wikidata)", x: 20, y: 10, width: 600, height: 470, color: "#388bfd",
+      tableIds: ["entities", "surface_forms", "entity_xrefs"] },
   ],
 };
