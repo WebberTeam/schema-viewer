@@ -12,6 +12,7 @@ import { resolve } from "path";
 export default defineConfig({
   plugins: [react()],
   root: "examples/embed",
+  base: "./", // relative paths — works from any subdirectory or CDN
   build: {
     outDir: "../../dist-embed",
     emptyOutDir: true,
