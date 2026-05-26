@@ -11,7 +11,7 @@ import { RelationshipPath } from "./RelationshipPath";
 import { SubjectArea, getContainedTables } from "./SubjectArea";
 import { TableEditor } from "./TableEditor";
 import { GroupEditor } from "./GroupEditor";
-import { exportPNG, exportSVG, exportJSON } from "../utils/exportDiagram";
+import { exportPNG, exportPDF, exportJSON } from "../utils/exportDiagram";
 import { hierarchicalLayout, gridLayout } from "../utils/autoLayout";
 
 const GRID_SIZE = 24;
@@ -322,8 +322,8 @@ export function SchemaViewer({
 
   return (
     <div ref={containerRef} style={{ width, height, position: "relative", overflow: "hidden", background: colors.bg, borderRadius: "8px" }}>
-      {/* Controls */}
-      <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, display: "flex", gap: 4 }}>
+      {/* Controls — hidden from export via data-export-ignore */}
+      <div data-export-ignore="true" style={{ position: "absolute", top: 8, right: 8, zIndex: 10, display: "flex", gap: 4 }}>
         <button onClick={fitAll} style={btnStyle(colors)} title="Fit all">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h4v1.5H3.5V6H2V2zm8 0h4v4h-1.5V3.5H10V2zM2 10h1.5v2.5H6V14H2v-4zm10 2.5V10h1.5v4h-4v-1.5h2.5z"/></svg>
         </button>
@@ -337,8 +337,8 @@ export function SchemaViewer({
             <span style={{ width: 1, height: 20, background: colors.border, alignSelf: "center" }} />
           </>
         )}
-        <button onClick={() => exportPNG(svgRef.current)} style={btnStyle(colors)} title="Export PNG">PNG</button>
-        <button onClick={() => exportSVG(svgRef.current)} style={btnStyle(colors)} title="Export SVG">SVG</button>
+        <button onClick={() => exportPNG(containerRef.current)} style={btnStyle(colors)} title="Export PNG">PNG</button>
+        <button onClick={() => exportPDF(containerRef.current)} style={btnStyle(colors)} title="Export PDF">PDF</button>
         <button onClick={() => exportJSON(schema)} style={btnStyle(colors)} title="Export JSON">JSON</button>
       </div>
 

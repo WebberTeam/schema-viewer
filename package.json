@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:embed": "vite build --config vite.embed.config.js",
     "preview": "vite preview"
   },
   "dependencies": {
+    "html-to-image": "^1.11.13",
+    "jspdf": "^4.2.1",
     "nanoid": "^5.1.11",
     "node-sql-parser": "^5.4.0",
     "react": "^19.0.0",

@@ -85,10 +85,12 @@ npm run build   # Production build to dist/
 5. ~~**Auto-layout** — Hierarchical (FK depth) + grid layout algorithms~~ DONE
 6. ~~**Group editor** — Create/edit/delete subject areas, change membership~~ DONE
 7. ~~**Relationship editor** — FK CRUD + edge styling (color, dash, bold, arrows)~~ DONE
-8. **RDF/ontology support** — Extend schema format for OWL classes, RDF properties, ontological hierarchies
-9. **Embed mode** — `<iframe>` / Web Component packaging for documentation sites
-10. **PDF export** — Multi-page PDF with jspdf
-11. **Force-directed layout** — Physics-based layout for complex schemas
+8. ~~**Embed mode** — iframe + postMessage API for documentation sites~~ DONE
+9. ~~**PDF export** — jspdf via html-to-image raster~~ DONE
+10. ~~**PNG export** — html-to-image (captures live DOM including foreignObject)~~ DONE
+11. **RDF/ontology support** — Extend schema format for OWL classes, RDF properties, ontological hierarchies
+12. **SVG export** — Needs proper foreignObject style inlining (deferred)
+13. **Force-directed layout** — Physics-based layout for complex schemas
 
 ## Attribution
 
