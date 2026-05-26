@@ -32,10 +32,10 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
   const [errors, setErrors] = useState([]);
   const [tab, setTab] = useState(initialTab);
 
-  // Find which group this table belongs to
-  const group = subjectAreas?.find((a) =>
-    a.tableIds?.includes(table.id)
-  );
+  // Group membership — editable
+  const currentGroupId = subjectAreas?.find((a) => a.tableIds?.includes(table.id))?.id ?? "";
+  const [selectedGroupId, setSelectedGroupId] = useState(currentGroupId);
+  const group = subjectAreas?.find((a) => a.id === selectedGroupId) || null;
 
   const updateField = useCallback((idx, key, value) => {
     setFields((prev) => prev.map((f, i) => i === idx ? { ...f, [key]: value } : f));
@@ -118,7 +118,8 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
     if (errs.length > 0) { setErrors(errs); return; }
     onSave(
       { ...table, name, comment, color, fields },
-      rels, // pass updated relationships back
+      rels,
+      { groupId: selectedGroupId || null, prevGroupId: currentGroupId || null },
     );
   };
 
@@ -145,6 +146,11 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
         {group && (
           <span style={{ padding: "1px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600, background: `${group.color}20`, color: group.color, border: `1px solid ${group.color}40` }}>
             {group.name}
+          </span>
+        )}
+        {!group && subjectAreas?.length > 0 && (
+          <span style={{ padding: "1px 8px", borderRadius: 10, fontSize: 10, color: colors.textDim, border: `1px solid ${colors.border}` }}>
+            ungrouped
           </span>
         )}
         <span style={{ flex: 1 }} />
@@ -177,6 +183,28 @@ export function TableEditor({ table, allTables, relationships, subjectAreas, ini
           <label style={labelStyle}>Comment</label>
           <input value={comment} onChange={(e) => setComment(e.target.value)} style={inputStyle(colors)} placeholder="Optional description..." />
         </div>
+
+        {/* Group membership */}
+        {subjectAreas && subjectAreas.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Group</label>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value === "" ? "" : Number(e.target.value) || e.target.value)}
+                style={{ ...inputStyle(colors), flex: 1 }}
+              >
+                <option value="">No group (ungrouped)</option>
+                {subjectAreas.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              {group && (
+                <div style={{ width: 18, height: 18, borderRadius: 4, background: group.color, border: `1px solid ${colors.border}`, flexShrink: 0 }} />
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Tab toggle */}
         <div style={{ display: "flex", gap: 2, background: colors.bg, borderRadius: 6, padding: 2, marginBottom: 12 }}>

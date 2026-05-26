@@ -391,16 +391,35 @@ export function SchemaViewer({
               colors={colors}
               initialTab={editorInitialTab}
               onClose={() => setEditingTable(null)}
-              onSave={(updatedTable, updatedRels) => {
+              onSave={(updatedTable, updatedRels, groupChange) => {
                 if (onChange) {
                   const touchedTableId = updatedTable.id;
                   const otherRels = schema.relationships.filter(
                     (r) => r.startTableId !== touchedTableId && r.endTableId !== touchedTableId
                   );
+
+                  // Update subject area membership
+                  let updatedAreas = schema.subjectAreas || [];
+                  if (groupChange) {
+                    updatedAreas = updatedAreas.map((a) => {
+                      let ids = [...(a.tableIds || [])];
+                      // Remove from previous group
+                      if (groupChange.prevGroupId && a.id === groupChange.prevGroupId) {
+                        ids = ids.filter((id) => id !== touchedTableId);
+                      }
+                      // Add to new group
+                      if (groupChange.groupId && a.id === groupChange.groupId && !ids.includes(touchedTableId)) {
+                        ids.push(touchedTableId);
+                      }
+                      return { ...a, tableIds: ids };
+                    });
+                  }
+
                   onChange({
                     ...schema,
                     tables: schema.tables.map((t) => t.id === updatedTable.id ? updatedTable : t),
                     relationships: [...otherRels, ...updatedRels],
+                    subjectAreas: updatedAreas,
                   });
                 }
                 setEditingTable(null);
