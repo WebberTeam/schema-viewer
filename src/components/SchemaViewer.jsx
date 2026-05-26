@@ -37,7 +37,7 @@ export function SchemaViewer({
     return separateOverlaps(positions, schema?.tables || [], tableWidth, schema?.subjectAreas || []);
   });
   const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY, moved } OR { areaId, tableIds, ... }
-  const [frontTableId, setFrontTableId] = useState(null); // table brought to front on click/drag
+  // frontTableId kept for backward compat but we use frontGroupIds for z-order
   const [editingTable, setEditingTable] = useState(null); // table being edited (double-click popup)
   const lastClickRef = useRef({ tableId: null, time: 0 }); // for double-click detection
 
@@ -55,13 +55,17 @@ export function SchemaViewer({
     [rawTables, tablePositions]
   );
 
-  // Sort tables so the "front" table renders last (SVG z-order = paint order)
+  // Track a set of front table IDs (single table or entire area group)
+  const [frontGroupIds, setFrontGroupIds] = useState(new Set());
+
+  // Sort tables so "front" tables render last (SVG z-order = paint order)
+  // Preserves internal ordering within the front group.
   const sortedTables = useMemo(() => {
-    if (!frontTableId) return tables;
-    const rest = tables.filter((t) => t.id !== frontTableId);
-    const front = tables.find((t) => t.id === frontTableId);
-    return front ? [...rest, front] : tables;
-  }, [tables, frontTableId]);
+    if (frontGroupIds.size === 0) return tables;
+    const back = tables.filter((t) => !frontGroupIds.has(t.id));
+    const front = tables.filter((t) => frontGroupIds.has(t.id));
+    return [...back, ...front];
+  }, [tables, frontGroupIds]);
 
   const colors = useMemo(() => ({
     bg: theme === "dark" ? "#0d1117" : "#ffffff",
@@ -87,7 +91,7 @@ export function SchemaViewer({
   const handleTablePointerDown = useCallback((e, tableId) => {
     if (!editable) return;
     e.stopPropagation();
-    setFrontTableId(tableId);
+    setFrontGroupIds(new Set([tableId]));
 
     // Double-click detection: two clicks within 400ms on same table
     const now = Date.now();
@@ -114,13 +118,14 @@ export function SchemaViewer({
     e.currentTarget.setPointerCapture(e.pointerId);
   }, [editable, screenToSVG, tablePositions, tables]);
 
-  // Area drag start (moves all tables in the area)
+  // Area drag start (moves all tables in the area, brings group to front)
   const handleAreaPointerDown = useCallback((e, areaData) => {
     if (!editable) return;
     e.stopPropagation();
     const svgPt = screenToSVG(e.clientX, e.clientY);
     const contained = getContainedTables(areaData, tables);
     const tableIds = contained.map((t) => t.id);
+    setFrontGroupIds(new Set(tableIds)); // bring entire group to front, preserving internal order
     const origPositions = Object.fromEntries(tableIds.map((id) => [id, { ...tablePositions[id] }]));
     setDragging({
       areaId: areaData.id,
@@ -316,13 +321,22 @@ export function SchemaViewer({
             table={editingTable}
             allTables={tables}
             relationships={relationships}
+            subjectAreas={areas}
             colors={colors}
             onClose={() => setEditingTable(null)}
-            onSave={(updated) => {
+            onSave={(updatedTable, updatedRels) => {
               if (onChange) {
+                // Merge updated relationships: replace matching IDs, add new, remove deleted
+                const editedRelIds = new Set(updatedRels.map((r) => r.id));
+                const touchedTableId = updatedTable.id;
+                // Keep rels not touching this table + merge in updated rels
+                const otherRels = schema.relationships.filter(
+                  (r) => r.startTableId !== touchedTableId && r.endTableId !== touchedTableId
+                );
                 onChange({
                   ...schema,
-                  tables: schema.tables.map((t) => t.id === updated.id ? updated : t),
+                  tables: schema.tables.map((t) => t.id === updatedTable.id ? updatedTable : t),
+                  relationships: [...otherRels, ...updatedRels],
                 });
               }
               setEditingTable(null);

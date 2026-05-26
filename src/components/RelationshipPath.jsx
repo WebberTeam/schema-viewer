@@ -69,8 +69,21 @@ export function RelationshipPath({
 
   if (!pathValues || !d) return null;
 
+  const pathColor = data.strokeColor || colors.relationship;
+  const dashArray = data.strokeStyle === "dashed" ? "8,4" : data.strokeStyle === "dotted" ? "2,3" : "none";
+  const arrowId = `arrow_${data.id}`;
+
   return (
     <g style={{ pointerEvents: "visibleStroke", userSelect: "none" }}>
+      {/* Arrow marker definition */}
+      {(data.showArrow ?? true) && (
+        <defs>
+          <marker id={arrowId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={pathColor} />
+          </marker>
+        </defs>
+      )}
+
       {/* Invisible wider hit area */}
       <path d={d} fill="none" stroke="transparent" strokeWidth={12} />
 
@@ -79,8 +92,10 @@ export function RelationshipPath({
         ref={pathRef}
         d={d}
         fill="none"
-        stroke={colors.relationship}
+        stroke={pathColor}
         strokeWidth={1.5}
+        strokeDasharray={dashArray}
+        markerEnd={(data.showArrow ?? true) ? `url(#${arrowId})` : undefined}
       />
 
       {/* Relationship label */}
@@ -89,9 +104,10 @@ export function RelationshipPath({
           ref={labelRef}
           x={positions.mid.x - positions.lw / 2}
           y={positions.mid.y + positions.lh / 2}
-          fill={colors.textDim}
+          fill={data.strokeColor || colors.textDim}
           fontSize={12}
-          fontWeight={500}
+          fontWeight={data.labelBold ? 700 : 500}
+          fontStyle={data.labelItalic ? "italic" : "normal"}
           fontFamily="inherit"
         >
           {data.name}
