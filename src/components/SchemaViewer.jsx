@@ -33,7 +33,7 @@ export function SchemaViewer({
   // Editor state: internal copy of tables for drag positioning
   const [tablePositions, setTablePositions] = useState(() => {
     const positions = Object.fromEntries((schema?.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]));
-    return separateOverlaps(positions, schema?.tables || [], tableWidth);
+    return separateOverlaps(positions, schema?.tables || [], tableWidth, schema?.subjectAreas || []);
   });
   const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY }
   const [frontTableId, setFrontTableId] = useState(null); // table brought to front on click/drag
@@ -266,33 +266,86 @@ function computeInitialViewBox(schema) {
 }
 
 /**
- * Simple overlap separation — pushes overlapping tables apart on initial render.
- * Runs a few iterations of collision resolution.
+ * Two-level overlap separation:
+ * 1. Lay out tables within each subject area (intra-group gravity)
+ * 2. Compute each area's bounding box from its tables
+ * 3. Separate areas so they don't overlap (inter-group gravity)
+ * 4. Translate area tables by the area's displacement
+ * 5. Separate any ungrouped tables against everything
  */
-function separateOverlaps(positions, tables, tw = 220) {
+function separateOverlaps(positions, tables, tw = 220, areas = []) {
   if (tables.length < 2) return positions;
 
-  const result = { ...positions };
-  const PAD = 16;
-  const th = 250; // approximate table height
+  const result = {};
+  for (const t of tables) {
+    result[t.id] = { x: positions[t.id]?.x ?? t.x, y: positions[t.id]?.y ?? t.y };
+  }
 
-  for (let iter = 0; iter < 5; iter++) {
+  const PAD = 20;
+  const AREA_PAD = 40;
+
+  // Estimate table height from field count
+  function tableHeight(t) {
+    return 57 + (t.fields?.length || 3) * 36 + (t.comment ? 30 : 0);
+  }
+
+  // --- Step 1: Separate tables within each area ---
+  const grouped = new Set();
+  const areaGroups = [];
+
+  for (const area of areas) {
+    const memberIds = area.tableIds || [];
+    if (memberIds.length === 0) continue;
+    const members = tables.filter((t) => memberIds.includes(t.id));
+    if (members.length === 0) continue;
+
+    members.forEach((t) => grouped.add(t.id));
+    separateTableSet(result, members, tw, PAD, tableHeight);
+    areaGroups.push({ area, members });
+  }
+
+  // --- Step 2: Compute area bounding boxes ---
+  const areaBounds = areaGroups.map(({ area, members }) => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const t of members) {
+      const p = result[t.id];
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + tw);
+      maxY = Math.max(maxY, p.y + tableHeight(t));
+    }
+    return {
+      area,
+      members,
+      x: minX - AREA_PAD,
+      y: minY - AREA_PAD - 24, // room for label
+      w: maxX - minX + AREA_PAD * 2,
+      h: maxY - minY + AREA_PAD * 2 + 24,
+    };
+  });
+
+  // --- Step 3: Separate areas from each other ---
+  for (let iter = 0; iter < 8; iter++) {
     let moved = false;
-    for (let i = 0; i < tables.length; i++) {
-      for (let j = i + 1; j < tables.length; j++) {
-        const a = tables[i], b = tables[j];
-        const ax = result[a.id]?.x ?? a.x, ay = result[a.id]?.y ?? a.y;
-        const bx = result[b.id]?.x ?? b.x, by = result[b.id]?.y ?? b.y;
-
-        const overlapX = (ax + tw + PAD) - bx;
-        const overlapY = (ay + th + PAD) - by;
+    for (let i = 0; i < areaBounds.length; i++) {
+      for (let j = i + 1; j < areaBounds.length; j++) {
+        const a = areaBounds[i], b = areaBounds[j];
+        const overlapX = (a.x + a.w + PAD) - b.x;
+        const overlapY = (a.y + a.h + PAD) - b.y;
 
         if (overlapX > 0 && overlapY > 0) {
-          // Tables overlap — push the second one away
+          // Push area B away along axis of least overlap
+          let dx = 0, dy = 0;
           if (overlapX < overlapY) {
-            result[b.id] = { x: bx + overlapX, y: by };
+            dx = overlapX;
           } else {
-            result[b.id] = { x: bx, y: by + overlapY };
+            dy = overlapY;
+          }
+          b.x += dx;
+          b.y += dy;
+          // Translate all tables in area B
+          for (const t of b.members) {
+            result[t.id] = { x: result[t.id].x + dx, y: result[t.id].y + dy };
           }
           moved = true;
         }
@@ -300,7 +353,73 @@ function separateOverlaps(positions, tables, tw = 220) {
     }
     if (!moved) break;
   }
+
+  // --- Step 4: Separate ungrouped tables against all others ---
+  const ungrouped = tables.filter((t) => !grouped.has(t.id));
+  if (ungrouped.length > 0) {
+    // First separate ungrouped from each other
+    separateTableSet(result, ungrouped, tw, PAD, tableHeight);
+
+    // Then separate ungrouped from all grouped tables
+    const allGrouped = tables.filter((t) => grouped.has(t.id));
+    for (let iter = 0; iter < 5; iter++) {
+      let moved = false;
+      for (const u of ungrouped) {
+        for (const g of allGrouped) {
+          const ux = result[u.id].x, uy = result[u.id].y;
+          const gx = result[g.id].x, gy = result[g.id].y;
+          const oh = tableHeight(g);
+          const uh = tableHeight(u);
+
+          const overlapX = Math.min(ux + tw + PAD, gx + tw + PAD) - Math.max(ux, gx);
+          const overlapY = Math.min(uy + uh + PAD, gy + oh + PAD) - Math.max(uy, gy);
+
+          if (overlapX > 0 && overlapY > 0) {
+            if (overlapX < overlapY) {
+              result[u.id] = { x: ux + (ux < gx ? -overlapX : overlapX), y: uy };
+            } else {
+              result[u.id] = { x: ux, y: uy + (uy < gy ? -overlapY : overlapY) };
+            }
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+  }
+
   return result;
+}
+
+/** Separate a set of tables from each other (in-place on result). */
+function separateTableSet(result, tables, tw, pad, heightFn) {
+  for (let iter = 0; iter < 8; iter++) {
+    let moved = false;
+    for (let i = 0; i < tables.length; i++) {
+      for (let j = i + 1; j < tables.length; j++) {
+        const a = tables[i], b = tables[j];
+        const ax = result[a.id].x, ay = result[a.id].y;
+        const bx = result[b.id].x, by = result[b.id].y;
+        const ah = heightFn(a), bh = heightFn(b);
+
+        const overlapX = (ax + tw + pad) - bx;
+        const overlapY = (ay + ah + pad) - by;
+
+        if (overlapX > 0 && overlapY > 0) {
+          if (overlapX < overlapY) {
+            // Push B right (half each for balance)
+            result[a.id] = { ...result[a.id], x: ax - Math.floor(overlapX / 2) };
+            result[b.id] = { ...result[b.id], x: bx + Math.ceil(overlapX / 2) };
+          } else {
+            result[a.id] = { ...result[a.id], y: ay - Math.floor(overlapY / 2) };
+            result[b.id] = { ...result[b.id], y: by + Math.ceil(overlapY / 2) };
+          }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
 }
 
 function btnStyle(colors) {
