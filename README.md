@@ -43,16 +43,47 @@ const schema = importSQL(`
 `, 'postgres');
 ```
 
-## Embed via iframe
+## CDN (pre-v1)
 
+GitHub Pages serves the latest `master` build as a CDN at:
+
+```
+https://webberteam.github.io/schema-viewer/
+```
+
+Every push to `master` triggers an automated build + deploy via GitHub Actions.
+
+### Embed via iframe (CDN)
 ```html
-<iframe src="embed/index.html?schema=schema.json&theme=dark" width="100%" height="600" />
+<iframe
+  src="https://webberteam.github.io/schema-viewer/?schema=https://example.com/my-schema.json&theme=dark"
+  width="100%" height="600" style="border:none; border-radius:8px;"
+/>
 ```
 
-Or load dynamically:
-```js
-iframe.contentWindow.postMessage({ type: 'loadSchema', schema: mySchema }, '*');
+### Embed via iframe (self-hosted)
+```html
+<iframe src="/schema-viewer/index.html?schema=/api/schema.json&theme=dark" height="600" />
 ```
+
+### Load schema dynamically via postMessage
+```js
+const viewer = document.getElementById('my-viewer');
+viewer.contentWindow.postMessage({ type: 'loadSchema', schema: mySchemaJSON }, '*');
+
+// Listen for edits
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'schemaChanged') console.log('Updated:', e.data.schema);
+});
+```
+
+### URL Parameters
+| Param | Values | Default | Description |
+|-------|--------|---------|-------------|
+| `schema` | URL | — | Load schema JSON from URL |
+| `theme` | `dark` \| `light` | `dark` | Color theme |
+| `editable` | `true` \| `false` | `false` | Enable editor mode |
+| `title` | string | — | Title bar text |
 
 ## Schema Format
 
