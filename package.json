@@ -9,19 +9,28 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "nanoid": "^5.1.11",
+    "node-sql-parser": "^5.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
     "@vitejs/plugin-react": "^4.3.0",
-    "vite": "^6.0.0",
     "tailwindcss": "^4.0.0",
-    "@tailwindcss/vite": "^4.0.0"
+    "vite": "^6.0.0"
   },
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "https://github.com/WebberTeam/schema-viewer.git"
   },
-  "keywords": ["schema", "viewer", "erd", "database", "diagram", "svg"]
+  "keywords": [
+    "schema",
+    "viewer",
+    "erd",
+    "database",
+    "diagram",
+    "svg"
+  ]
 }

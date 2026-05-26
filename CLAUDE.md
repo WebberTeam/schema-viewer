@@ -16,33 +16,44 @@ A read-only interactive database schema viewer extracted from [DrawDB](https://g
 
 ```
 src/
+├── index.js                # Library barrel export
 ├── components/
-│   ├── SchemaViewer.jsx    # Root component: SVG container, zoom/pan, grid
-│   ├── TableNode.jsx       # Table box rendered as foreignObject
+│   ├── SchemaViewer.jsx    # Root component: SVG container, zoom/pan, grid, editor drag
+│   ├── TableNode.jsx       # Table box rendered as foreignObject (draggable in editor mode)
 │   ├── RelationshipPath.jsx # SVG path + cardinality badges
 │   ├── SubjectArea.jsx     # Colored grouping box
-│   └── index.js            # Barrel export
+│   └── index.js            # Component barrel export
 ├── utils/
-│   └── calcPath.js         # Bezier path routing (pure math, 0 deps)
-├── data/
-│   └── demo-schema.js      # Demo PostgreSQL schema
-└── main.jsx                # Demo app entry point
+│   ├── calcPath.js         # Bezier path routing (pure math, 0 deps)
+│   └── importSQL.js        # SQL DDL → schema JSON (node-sql-parser)
+examples/
+└── demo/
+    └── src/
+        ├── main.jsx        # Demo app with SQL import panel + RDS schema
+        └── demo-schema.js  # Sample PostgreSQL entity_resolution schema
 ```
 
 ## Usage
 
 ```jsx
-import { SchemaViewer } from './components';
+import { SchemaViewer, importSQL } from './src';
 
+// Read-only mode (default)
+<SchemaViewer schema={jsonSchema} theme="dark" width="100%" height="600px" />
+
+// Editor mode (tables are draggable, snaps to grid)
 <SchemaViewer
-  schema={jsonSchema}     // DrawDB-compatible JSON
-  theme="dark"            // "dark" | "light"
-  width="100%"
-  height="600px"
-  showComments={true}
-  showCardinality={true}
-  showRelationshipLabels={true}
+  schema={jsonSchema}
+  theme="dark"
+  editable={true}
+  onChange={(updated) => setSchema(updated)}
 />
+
+// Import from SQL DDL
+const schema = importSQL(`
+  CREATE TABLE users (id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE);
+  CREATE TABLE posts (id SERIAL PRIMARY KEY, author_id INTEGER REFERENCES users(id));
+`, "postgres");
 ```
 
 ## Schema JSON Format
@@ -67,11 +78,13 @@ npm run build   # Production build to dist/
 
 ## Roadmap
 
-1. **SQL import** — Parse CREATE TABLE DDL into schema JSON (port from DrawDB's node-sql-parser logic)
-2. **Editor mode** — Re-enable drag/edit for schema design (optional toggle)
-3. **RDF/ontology support** — Extend schema format to support OWL classes, RDF properties, ontological hierarchies
-4. **Export** — PNG, SVG, PDF export of rendered diagrams
-5. **Embed mode** — `<iframe>` / Web Component packaging for documentation sites
+1. ~~**SQL import** — Parse CREATE TABLE DDL into schema JSON~~ DONE (v0.1.0)
+2. ~~**Editor mode** — Drag tables to reposition~~ DONE (v0.1.0)
+3. **Column editing** — Add/remove/reorder fields, edit types
+4. **RDF/ontology support** — Extend schema format to support OWL classes, RDF properties, ontological hierarchies
+5. **Export** — PNG, SVG, PDF export of rendered diagrams
+6. **Embed mode** — `<iframe>` / Web Component packaging for documentation sites
+7. **Auto-layout** — Force-directed or hierarchical graph layout algorithms
 
 ## Attribution
 

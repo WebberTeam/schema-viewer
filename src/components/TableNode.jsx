@@ -24,7 +24,7 @@ function getTypeColor(type) {
   return TYPE_COLORS[upper] || "#71717a";
 }
 
-export function TableNode({ data, tableWidth = 220, showComments = true, colors }) {
+export function TableNode({ data, tableWidth = 220, showComments = true, colors, editable = false, isDragging = false, onPointerDown }) {
   const height = useMemo(
     () => getTableHeight(data, tableWidth, showComments),
     [data, tableWidth, showComments]
@@ -34,18 +34,26 @@ export function TableNode({ data, tableWidth = 220, showComments = true, colors 
   if (data.hidden) return null;
 
   return (
-    <foreignObject x={data.x} y={data.y} width={tableWidth} height={height}>
+    <foreignObject
+      x={data.x}
+      y={data.y}
+      width={tableWidth}
+      height={height}
+      onPointerDown={editable ? onPointerDown : undefined}
+      style={{ cursor: editable ? (isDragging ? "grabbing" : "grab") : "default" }}
+    >
       <div
         xmlns="http://www.w3.org/1999/xhtml"
         style={{
-          border: `1.5px solid ${colors.border}`,
+          border: isDragging ? "2px solid #388bfd" : `1.5px solid ${colors.border}`,
           borderRadius: 8,
           overflow: "hidden",
           background: colors.surface,
           fontFamily: "'SF Mono','Cascadia Code','Consolas',monospace",
           fontSize: 12,
           color: colors.text,
-          boxShadow: "0 4px 12px rgba(0,0,0,.25)",
+          boxShadow: isDragging ? "0 8px 24px rgba(56,139,253,.3)" : "0 4px 12px rgba(0,0,0,.25)",
+          transition: isDragging ? "none" : "box-shadow 0.15s",
         }}
       >
         {/* Color strip */}

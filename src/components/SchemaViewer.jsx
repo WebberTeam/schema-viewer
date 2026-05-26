@@ -22,15 +22,33 @@ export function SchemaViewer({
   showComments = true,
   showCardinality = true,
   showRelationshipLabels = true,
+  editable = false,
+  onChange = null,
 }) {
   const svgRef = useRef(null);
   const [viewBox, setViewBox] = useState(() => computeInitialViewBox(schema));
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
-  const tables = schema?.tables || [];
+  // Editor state: internal copy of tables for drag positioning
+  const [tablePositions, setTablePositions] = useState(() =>
+    Object.fromEntries((schema?.tables || []).map((t) => [t.id, { x: t.x, y: t.y }]))
+  );
+  const [dragging, setDragging] = useState(null); // { tableId, startX, startY, origX, origY }
+
+  const rawTables = schema?.tables || [];
   const relationships = schema?.relationships || [];
   const areas = schema?.subjectAreas || [];
+
+  // Merge editor positions over schema positions
+  const tables = useMemo(() =>
+    rawTables.map((t) => ({
+      ...t,
+      x: tablePositions[t.id]?.x ?? t.x,
+      y: tablePositions[t.id]?.y ?? t.y,
+    })),
+    [rawTables, tablePositions]
+  );
 
   const colors = useMemo(() => ({
     bg: theme === "dark" ? "#0d1117" : "#ffffff",
@@ -43,26 +61,78 @@ export function SchemaViewer({
     relationshipHover: "#388bfd",
   }), [theme]);
 
+  // Convert screen coordinates to SVG coordinates
+  const screenToSVG = useCallback((clientX, clientY) => {
+    const rect = svgRef.current.getBoundingClientRect();
+    return {
+      x: ((clientX - rect.left) / rect.width) * viewBox.width + viewBox.left,
+      y: ((clientY - rect.top) / rect.height) * viewBox.height + viewBox.top,
+    };
+  }, [viewBox]);
+
+  // Table drag start (called from TableNode)
+  const handleTablePointerDown = useCallback((e, tableId) => {
+    if (!editable) return;
+    e.stopPropagation();
+    const svgPt = screenToSVG(e.clientX, e.clientY);
+    const pos = tablePositions[tableId];
+    setDragging({
+      tableId,
+      startX: svgPt.x,
+      startY: svgPt.y,
+      origX: pos?.x ?? 0,
+      origY: pos?.y ?? 0,
+    });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, [editable, screenToSVG, tablePositions]);
+
   // Pan handlers
   const handlePointerDown = useCallback((e) => {
-    if (e.target === svgRef.current || e.target.tagName === "rect") {
+    if (e.target === svgRef.current || e.target.tagName === "rect" || e.target.closest("[data-grid]")) {
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
-      e.currentTarget.setPointerCapture(e.pointerId);
+      svgRef.current.setPointerCapture(e.pointerId);
     }
   }, []);
 
   const handlePointerMove = useCallback((e) => {
+    // Table dragging takes priority
+    if (dragging) {
+      const svgPt = screenToSVG(e.clientX, e.clientY);
+      const dx = svgPt.x - dragging.startX;
+      const dy = svgPt.y - dragging.startY;
+      const newX = Math.round((dragging.origX + dx) / GRID_SIZE) * GRID_SIZE;
+      const newY = Math.round((dragging.origY + dy) / GRID_SIZE) * GRID_SIZE;
+      setTablePositions((prev) => ({
+        ...prev,
+        [dragging.tableId]: { x: newX, y: newY },
+      }));
+      return;
+    }
+
     if (!isPanning) return;
     const dx = (e.clientX - panStart.x) * (viewBox.width / svgRef.current.clientWidth);
     const dy = (e.clientY - panStart.y) * (viewBox.height / svgRef.current.clientHeight);
     setViewBox((v) => ({ ...v, left: v.left - dx, top: v.top - dy }));
     setPanStart({ x: e.clientX, y: e.clientY });
-  }, [isPanning, panStart, viewBox]);
+  }, [dragging, isPanning, panStart, viewBox, screenToSVG]);
 
   const handlePointerUp = useCallback(() => {
+    if (dragging && onChange) {
+      // Emit updated schema with new positions
+      const updated = {
+        ...schema,
+        tables: tables.map((t) => ({
+          ...t,
+          x: tablePositions[t.id]?.x ?? t.x,
+          y: tablePositions[t.id]?.y ?? t.y,
+        })),
+      };
+      onChange(updated);
+    }
+    setDragging(null);
     setIsPanning(false);
-  }, []);
+  }, [dragging, onChange, schema, tables, tablePositions]);
 
   // Zoom handler
   const handleWheel = useCallback((e) => {
@@ -119,6 +189,7 @@ export function SchemaViewer({
           </pattern>
         </defs>
         <rect
+          data-grid="true"
           x={viewBox.left - 1000}
           y={viewBox.top - 1000}
           width={viewBox.width + 2000}
@@ -153,6 +224,9 @@ export function SchemaViewer({
             tableWidth={tableWidth}
             showComments={showComments}
             colors={colors}
+            editable={editable}
+            isDragging={dragging?.tableId === table.id}
+            onPointerDown={(e) => handleTablePointerDown(e, table.id)}
           />
         ))}
       </svg>
